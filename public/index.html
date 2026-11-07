@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>scrolltogo</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main class="host">
+    <h1>scrolltogo</h1>
+    <p class="sub">Share your screen. Friends open the link and watch.</p>
+
+    <form class="card" id="setup">
+      <div class="field">
+        <label for="room">Room name</label>
+        <div class="prefix"><span id="origin"></span><input id="room" required pattern="[a-z0-9\-]{3,32}" maxlength="32" autocomplete="off" spellcheck="false"></div>
+        <p class="hint">3–32 characters: lowercase letters, numbers and dashes.</p>
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input id="password" type="password" required minlength="4" autocomplete="new-password">
+        <p class="hint">Friends need this to watch. Changing it kicks out everyone watching.</p>
+      </div>
+      <div class="row">
+        <label for="quality">Quality</label>
+        <select id="quality">
+          <option value="720p30">720p · 30 fps (light)</option>
+          <option value="1080p30" selected>1080p · 30 fps</option>
+          <option value="1080p60">1080p · 60 fps (games)</option>
+          <option value="1440p30">1440p · 30 fps</option>
+          <option value="1440p60">1440p · 60 fps</option>
+          <option value="2160p30">4K · 30 fps</option>
+          <option value="2160p60">4K · 60 fps (heavy)</option>
+        </select>
+      </div>
+      <p class="hint" id="upload-hint"></p>
+      <div class="row"><button id="start">Start sharing</button></div>
+      <p class="hint">Tick "Share system audio" or "Share tab audio" in the picker if you want friends to hear the sound.</p>
+      <p class="error hidden" id="error"></p>
+    </form>
+
+    <section class="card hidden" id="live">
+      <div class="row" style="justify-content: space-between">
+        <div class="status"><span class="dot"></span>Live · <span id="count">0 watching</span></div>
+        <button class="danger" id="stop">Stop</button>
+      </div>
+      <div class="link">
+        <input id="link" readonly>
+        <button class="ghost" id="copy">Copy link</button>
+      </div>
+      <p class="hint">Send the link and the password separately. Without the password nobody can watch.</p>
+      <video class="preview" id="preview" autoplay muted playsinline></video>
+    </section>
+  </main>
+  <script type="module" src="/host.js"></script>
+</body>
+</html>

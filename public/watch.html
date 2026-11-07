@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Watching · scrolltogo</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main class="watch" id="stage">
+    <video id="video" autoplay muted playsinline></video>
+    <div class="overlay"><p id="status"></p></div>
+
+    <form class="gate card" id="gate">
+      <h2>Join <span id="room-name"></span></h2>
+      <div class="field">
+        <label for="password">Room password</label>
+        <input id="password" type="password" required autocomplete="current-password" autofocus>
+      </div>
+      <p class="error hidden" id="error"></p>
+      <button>Watch</button>
+    </form>
+
+    <div class="controls">
+      <button id="unmute" class="hidden">🔊 Unmute</button>
+      <button id="fullscreen">⛶ Fullscreen</button>
+    </div>
+  </main>
+  <script type="module" src="/watch.js"></script>
+</body>
+</html>
