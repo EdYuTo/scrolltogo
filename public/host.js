@@ -234,16 +234,17 @@ async function refreshStats() {
     const lossPct = (remote?.fractionLost ?? 0) * 100;
     const linkMbps = pair?.availableOutgoingBitrate ? pair.availableOutgoingBitrate / 1e6 : null;
 
-    let advice = ["ok", "Full quality."];
+    const problems = [];
     if (source?.framesPerSecond && source.framesPerSecond < quality.fps * 0.75) {
-      advice = ["warn", `Your screen capture is only giving ${Math.round(source.framesPerSecond)} fps. If it's a game, use borderless/windowed instead of exclusive fullscreen, and keep the shared window visible.`];
-    } else if (out.qualityLimitationReason === "cpu") {
-      advice = ["warn", "Your computer can't encode fast enough. Try codec H.264, a lower quality, or fewer viewers."];
-    } else if (out.qualityLimitationReason === "bandwidth") {
-      advice = ["warn", `Limited by the network${linkMbps ? ` (~${linkMbps.toFixed(1)} Mbps available)` : ""}: your upload or their download. Try a lower quality or the AV1/VP9 codec.`];
-    } else if (lossPct > 3) {
-      advice = ["warn", `${lossPct.toFixed(0)}% of packets are being lost. Their Wi-Fi or connection is unstable.`];
+      problems.push(`Screen capture is only giving ${Math.round(source.framesPerSecond)} fps: the game is leaving the browser too little GPU/CPU. Cap the game's fps, and use borderless/windowed rather than exclusive fullscreen.`);
     }
+    if (out.qualityLimitationReason === "cpu") {
+      problems.push("Your computer can't encode fast enough. Try codec H.264, a lower quality, or fewer viewers.");
+    } else if (out.qualityLimitationReason === "bandwidth") {
+      problems.push(`Limited by the network${linkMbps ? ` (~${linkMbps.toFixed(1)} Mbps available)` : ""}: your upload or their download. Try a lower quality.`);
+    }
+    if (lossPct > 3) problems.push(`${lossPct.toFixed(0)}% of packets are being lost. Their Wi-Fi or connection is unstable.`);
+    const advice = problems.length ? ["warn", problems.join(" ")] : ["ok", "Full quality."];
     cards.push({
       title: `Friend ${n}`,
       numbers: `${out.frameWidth ?? "?"}×${out.frameHeight ?? "?"} @ ${Math.round(out.framesPerSecond ?? 0)} fps · ${mbps.toFixed(1)} Mbps · ${codecName}${encoder ? ` (${encoder})` : ""}${pair?.currentRoundTripTime ? ` · ${Math.round(pair.currentRoundTripTime * 1000)} ms` : ""}`,
