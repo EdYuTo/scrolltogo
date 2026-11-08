@@ -40,3 +40,14 @@ npx wrangler secret put TURN_KEY_API_TOKEN
 - `public/host.js` – capture and send the screen
 - `public/watch.js` – password prompt and player
 - `public/common.js` – reconnecting signaling socket
+
+## Host app (Windows)
+
+Uncapped, focused games can starve Chrome's screen capture on the GPU, so the stream stutters. OBS avoids this by giving itself realtime GPU scheduling priority (`D3DKMTSetProcessSchedulingPriorityClass` in `libobs-d3d11`). `host-app/` is a small launcher that opens the host page in its own Chrome window and gives that window's processes the same priority. Viewers still just use the link in their browser.
+
+```bash
+cd host-app
+dotnet publish -c Release -o ../dist
+```
+
+Run `dist/scrolltogo.exe` and accept the admin prompt (needed for the GPU priority, same as OBS). Requires the .NET 9 desktop runtime and Chrome or Edge.

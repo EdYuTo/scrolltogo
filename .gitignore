@@ -2,3 +2,6 @@ node_modules/
 .wrangler/
 .dev.vars
 .claude/
+dist/
+host-app/bin/
+host-app/obj/
