@@ -41,8 +41,9 @@ function randomId(length) {
   return Array.from(crypto.getRandomValues(new Uint8Array(length)), (b) => chars[b % chars.length]).join("");
 }
 
-for (const key of ["quality", "content", "codec"]) {
-  if (saved[key] && [...$(key).options].some((o) => o.value === saved[key])) $(key).value = saved[key];
+// Saved as "encoder": an older version stored an AV1 default under "codec".
+for (const [key, id] of [["quality", "quality"], ["content", "content"], ["encoder", "codec"]]) {
+  if (saved[key] && [...$(id).options].some((o) => o.value === saved[key])) $(id).value = saved[key];
 }
 const showUploadHint = () => {
   const mbps = QUALITY[$("quality").value].bitrate / 1_000_000;
@@ -136,7 +137,7 @@ $("setup").onsubmit = async (e) => {
       showError(e.reason || "Disconnected from the room.");
     },
   });
-  save(Object.assign(saved, { room, quality: $("quality").value, content: $("content").value, codec: $("codec").value }));
+  save(Object.assign(saved, { room, quality: $("quality").value, content: $("content").value, encoder: $("codec").value }));
 };
 
 function onMessage(msg) {

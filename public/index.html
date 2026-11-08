@@ -46,9 +46,9 @@
         <label for="codec">Codec</label>
         <select id="codec">
           <option value="auto">Auto (prefers a hardware encoder)</option>
-          <option value="video/AV1" selected>AV1 (best compression)</option>
+          <option value="video/AV1">AV1 (best compression, CPU-heavy)</option>
           <option value="video/VP9">VP9</option>
-          <option value="video/H264">H.264 (lightest on CPU)</option>
+          <option value="video/H264" selected>H.264 (best for gaming)</option>
           <option value="video/VP8">VP8 (old default)</option>
         </select>
         <span class="hint" id="codec-hint"></span>
