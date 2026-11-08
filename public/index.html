@@ -35,6 +35,24 @@
         </select>
       </div>
       <p class="hint" id="upload-hint"></p>
+      <div class="row">
+        <label for="content">Content</label>
+        <select id="content">
+          <option value="motion" selected>Games / video (keeps fps smooth)</option>
+          <option value="detail">Text / code (keeps text sharp)</option>
+        </select>
+      </div>
+      <div class="row">
+        <label for="codec">Codec</label>
+        <select id="codec">
+          <option value="auto">Auto (prefers a hardware encoder)</option>
+          <option value="video/AV1" selected>AV1 (best compression)</option>
+          <option value="video/VP9">VP9</option>
+          <option value="video/H264">H.264 (lightest on CPU)</option>
+          <option value="video/VP8">VP8 (old default)</option>
+        </select>
+        <span class="hint" id="codec-hint"></span>
+      </div>
       <div class="row"><button id="start">Start sharing</button></div>
       <p class="hint">Tick "Share system audio" or "Share tab audio" in the picker if you want friends to hear the sound.</p>
       <p class="error hidden" id="error"></p>
@@ -51,6 +69,7 @@
       </div>
       <p class="hint">Send the link and the password separately. Without the password nobody can watch.</p>
       <video class="preview" id="preview" autoplay muted playsinline></video>
+      <div id="stats" class="stats"></div>
     </section>
   </main>
   <script type="module" src="/host.js"></script>

@@ -12,7 +12,7 @@ const QUALITY = {
 
 const $ = (id) => document.getElementById(id);
 const peers = new Map(); // viewer id -> RTCPeerConnection
-let stream, signal, ice, quality;
+let stream, signal, ice, quality, codec, statsTimer;
 
 // This browser's token proves it owns the rooms it created. The last room name
 // is remembered so the same link can be reused and bookmarked by friends.
@@ -41,13 +41,57 @@ function randomId(length) {
   return Array.from(crypto.getRandomValues(new Uint8Array(length)), (b) => chars[b % chars.length]).join("");
 }
 
-if (QUALITY[saved.quality]) $("quality").value = saved.quality;
+for (const key of ["quality", "content", "codec"]) {
+  if (saved[key] && [...$(key).options].some((o) => o.value === saved[key])) $(key).value = saved[key];
+}
 const showUploadHint = () => {
   const mbps = QUALITY[$("quality").value].bitrate / 1_000_000;
   $("upload-hint").textContent = `Uses up to ~${mbps} Mbps of your upload per viewer (3 viewers ≈ ${mbps * 3} Mbps).`;
 };
-$("quality").onchange = showUploadHint;
+const showCodecHint = async () => {
+  const choice = await resolveCodec($("codec").value, QUALITY[$("quality").value]);
+  $("codec-hint").textContent = `→ ${choice.mime.slice(6)}${choice.hardware ? " (hardware encoder)" : " (software encoder)"}`;
+};
+$("quality").onchange = () => (showUploadHint(), showCodecHint());
+$("codec").onchange = showCodecHint;
 showUploadHint();
+showCodecHint();
+
+// A codec with a hardware encoder (GPU) keeps the fps up without loading the CPU,
+// which matters because every viewer gets their own encode. "Auto" prefers the
+// best-compressing codec the GPU can encode, otherwise a light software one.
+async function resolveCodec(choice, q) {
+  const available = new Set(RTCRtpSender.getCapabilities("video").codecs.map((c) => c.mimeType));
+  const hardware = async (mime) => {
+    try {
+      const info = await navigator.mediaCapabilities.encodingInfo({
+        type: "webrtc",
+        video: { contentType: mime, width: q.width, height: q.height, bitrate: q.bitrate, framerate: q.fps },
+      });
+      return info.supported && info.powerEfficient;
+    } catch {
+      return false;
+    }
+  };
+  if (choice !== "auto") return { mime: available.has(choice) ? choice : "video/VP8", hardware: await hardware(choice) };
+  for (const mime of ["video/AV1", "video/H264", "video/VP9"]) {
+    if (available.has(mime) && (await hardware(mime))) return { mime, hardware: true };
+  }
+  // No GPU encoder: VP9 compresses well but is CPU-heavy, so use H.264 above 1080p30.
+  const heavy = q.width * q.height * q.fps > 1920 * 1080 * 30;
+  const mime = !heavy && available.has("video/VP9") ? "video/VP9" : available.has("video/H264") ? "video/H264" : "video/VP8";
+  return { mime, hardware: false };
+}
+
+function preferCodec(transceiver, mime) {
+  const codecs = RTCRtpReceiver.getCapabilities("video").codecs;
+  const first = codecs.filter((c) => c.mimeType === mime);
+  if (!first.length) return;
+  try {
+    // The viewer's browser falls back down this list if it can't decode the first one.
+    transceiver.setCodecPreferences([...first, ...codecs.filter((c) => c.mimeType !== mime)]);
+  } catch {}
+}
 
 $("room").oninput =() => ($("room").value = $("room").value.toLowerCase().replace(/[^a-z0-9-]/g, ""));
 
@@ -69,10 +113,15 @@ $("setup").onsubmit = async (e) => {
     return;
   }
   const video = stream.getVideoTracks()[0];
-  if (quality.fps >= 60) video.contentHint = "motion";
+  // Chrome treats screen shares as text by default and drops fps to keep them
+  // sharp. "motion" makes it lower resolution instead, which suits games/video.
+  video.contentHint = $("content").value;
   video.onended = stop;
 
+  codec = (await resolveCodec($("codec").value, quality)).mime;
   ice = await getIceServers();
+  clearInterval(statsTimer);
+  statsTimer = setInterval(refreshStats, 2000);
   $("preview").srcObject = stream;
   $("link").value = `${location.origin}/w/${room}`;
   $("setup").classList.add("hidden");
@@ -87,7 +136,7 @@ $("setup").onsubmit = async (e) => {
       showError(e.reason || "Disconnected from the room.");
     },
   });
-  save(Object.assign(saved, { room, quality: $("quality").value }));
+  save(Object.assign(saved, { room, quality: $("quality").value, content: $("content").value, codec: $("codec").value }));
 };
 
 function onMessage(msg) {
@@ -122,7 +171,8 @@ async function callViewer(id) {
   for (const track of stream.getTracks()) {
     const init = { direction: "sendonly", streams: [stream] };
     if (track.kind === "video") init.sendEncodings = [{ maxBitrate: quality.bitrate, maxFramerate: quality.fps }];
-    pc.addTransceiver(track, init);
+    const transceiver = pc.addTransceiver(track, init);
+    if (track.kind === "video") preferCodec(transceiver, codec);
   }
   pc.onicecandidate = (e) => e.candidate && signal.send({ type: "signal", to: id, data: { candidate: e.candidate } });
   pc.onconnectionstatechange = updateCount;
@@ -152,7 +202,65 @@ function withStartBitrate(sdp, kbps) {
 function closePeer(id) {
   peers.get(id)?.close();
   peers.delete(id);
+  lastSample.delete(id);
   updateCount();
+}
+
+// Per-viewer stats with a plain-language guess at what's limiting the stream.
+const lastSample = new Map();
+async function refreshStats() {
+  const cards = [];
+  let n = 0;
+  for (const [id, pc] of peers) {
+    n++;
+    const report = await pc.getStats();
+    let out, source, remote, pairId;
+    report.forEach((s) => {
+      if (s.type === "outbound-rtp" && s.kind === "video") out = s;
+      if (s.type === "media-source" && s.kind === "video") source = s;
+      if (s.type === "remote-inbound-rtp" && s.kind === "video") remote = s;
+      if (s.type === "transport") pairId = s.selectedCandidatePairId;
+    });
+    if (!out || pc.connectionState !== "connected") {
+      cards.push({ title: `Friend ${n}`, numbers: "Connecting…" });
+      continue;
+    }
+    const pair = report.get(pairId);
+    const prev = lastSample.get(id);
+    lastSample.set(id, { bytes: out.bytesSent, ts: out.timestamp });
+    const mbps = prev ? ((out.bytesSent - prev.bytes) * 8) / (out.timestamp - prev.ts) / 1000 : 0;
+    const codecName = report.get(out.codecId)?.mimeType?.slice(6) ?? "?";
+    const encoder = out.powerEfficientEncoder === true ? "hardware" : out.powerEfficientEncoder === false ? "software" : "";
+    const lossPct = (remote?.fractionLost ?? 0) * 100;
+    const linkMbps = pair?.availableOutgoingBitrate ? pair.availableOutgoingBitrate / 1e6 : null;
+
+    let advice = ["ok", "Full quality."];
+    if (source?.framesPerSecond && source.framesPerSecond < quality.fps * 0.75) {
+      advice = ["warn", `Your screen capture is only giving ${Math.round(source.framesPerSecond)} fps. If it's a game, use borderless/windowed instead of exclusive fullscreen, and keep the shared window visible.`];
+    } else if (out.qualityLimitationReason === "cpu") {
+      advice = ["warn", "Your computer can't encode fast enough. Try codec H.264, a lower quality, or fewer viewers."];
+    } else if (out.qualityLimitationReason === "bandwidth") {
+      advice = ["warn", `Limited by the network${linkMbps ? ` (~${linkMbps.toFixed(1)} Mbps available)` : ""}: your upload or their download. Try a lower quality or the AV1/VP9 codec.`];
+    } else if (lossPct > 3) {
+      advice = ["warn", `${lossPct.toFixed(0)}% of packets are being lost. Their Wi-Fi or connection is unstable.`];
+    }
+    cards.push({
+      title: `Friend ${n}`,
+      numbers: `${out.frameWidth ?? "?"}×${out.frameHeight ?? "?"} @ ${Math.round(out.framesPerSecond ?? 0)} fps · ${mbps.toFixed(1)} Mbps · ${codecName}${encoder ? ` (${encoder})` : ""}${pair?.currentRoundTripTime ? ` · ${Math.round(pair.currentRoundTripTime * 1000)} ms` : ""}`,
+      advice,
+    });
+  }
+  $("stats").replaceChildren(
+    ...cards.map(({ title, numbers, advice }) => {
+      const el = document.createElement("div");
+      el.className = "viewer";
+      el.innerHTML = `<strong></strong><span class="numbers"></span>${advice ? `<span class="${advice[0]}"></span>` : ""}`;
+      el.children[0].textContent = title;
+      el.children[1].textContent = numbers;
+      if (advice) el.children[2].textContent = advice[1];
+      return el;
+    }),
+  );
 }
 
 function updateCount() {
@@ -166,6 +274,8 @@ function stop() {
   for (const id of [...peers.keys()]) closePeer(id);
   stream.getTracks().forEach((t) => t.stop());
   stream = null;
+  clearInterval(statsTimer);
+  $("stats").replaceChildren();
   // Let the goodbye messages flush before closing the socket.
   const s = signal;
   signal = null;

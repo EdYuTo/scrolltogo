@@ -79,6 +79,11 @@ async function onSignal(data) {
     pc = new RTCPeerConnection({ iceServers });
     const mine = pc;
     pc.ontrack = (e) => {
+      // Buffer a little more than WebRTC's near-zero default: slightly more delay,
+      // far fewer stutters when packets arrive unevenly.
+      try {
+        e.receiver.jitterBufferTarget = 150;
+      } catch {}
       video.srcObject = e.streams[0];
       video.play().catch(() => {});
       $("unmute").classList.toggle("hidden", !(video.muted && e.streams[0].getAudioTracks().length));
@@ -103,8 +108,38 @@ async function onSignal(data) {
 function endStream() {
   pc?.close();
   pc = null;
+  lastSample = null;
   video.srcObject = null;
   $("unmute").classList.add("hidden");
+}
+
+let statsTimer, lastSample;
+$("stats-toggle").onclick = () => {
+  const show = $("stats").classList.toggle("hidden") === false;
+  clearInterval(statsTimer);
+  if (show) {
+    refreshStats();
+    statsTimer = setInterval(refreshStats, 1000);
+  }
+};
+
+async function refreshStats() {
+  if (!pc) return ($("stats").textContent = "Not connected");
+  let inbound;
+  const report = await pc.getStats();
+  report.forEach((s) => s.type === "inbound-rtp" && s.kind === "video" && (inbound = s));
+  if (!inbound) return ($("stats").textContent = "Waiting for video…");
+  const mbps = lastSample ? ((inbound.bytesReceived - lastSample.bytes) * 8) / (inbound.timestamp - lastSample.ts) / 1000 : 0;
+  lastSample = { bytes: inbound.bytesReceived, ts: inbound.timestamp };
+  const lost = inbound.packetsLost ?? 0;
+  const lossPct = (lost / Math.max(1, lost + (inbound.packetsReceived ?? 0))) * 100;
+  const decoder = inbound.powerEfficientDecoder === true ? " (hardware)" : inbound.powerEfficientDecoder === false ? " (software)" : "";
+  $("stats").textContent = [
+    `${inbound.frameWidth ?? "?"}×${inbound.frameHeight ?? "?"} @ ${Math.round(inbound.framesPerSecond ?? 0)} fps`,
+    `${mbps.toFixed(1)} Mbps · ${report.get(inbound.codecId)?.mimeType?.slice(6) ?? "?"}${decoder}`,
+    `Lost packets: ${lossPct.toFixed(1)}%`,
+    `Dropped frames: ${inbound.framesDropped ?? 0} · Freezes: ${inbound.freezeCount ?? 0}`,
+  ].join("\n");
 }
 
 $("unmute").onclick = () => {
