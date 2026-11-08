@@ -50,4 +50,4 @@ cd host-app
 dotnet publish -c Release -o ../dist
 ```
 
-Run `dist/scrolltogo.exe` and accept the admin prompt (needed for the GPU priority, same as OBS). Requires the .NET 9 desktop runtime and Chrome or Edge.
+Run `dist/scrolltogo.exe`; no admin rights are needed. Requires the .NET 9 desktop runtime and Chrome or Edge.

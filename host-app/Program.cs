@@ -1,11 +1,8 @@
 // scrolltogo host app: opens the host page in its own Chrome window and keeps
 // that window's processes at the GPU scheduling priority OBS gives itself
 // (libobs-d3d11/d3d11-subsystem.cpp), so an uncapped game can't starve screen
-// capture and encoding.
-//
-// The browser runs as the normal user; only a small helper is elevated, because
-// realtime GPU priority needs admin rights.
-using System.ComponentModel;
+// capture and encoding. Setting another process's GPU scheduling class works
+// without admin rights, so everything runs as the normal user.
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Microsoft.Win32;
@@ -14,14 +11,8 @@ static class Program
 {
     const string Url = "https://scrolltogo.edson-yudi-toma.workers.dev/";
 
-    static int Main(string[] args)
+    static int Main()
     {
-        if (args.Length == 2 && args[0] == "--boost" && int.TryParse(args[1], out var root))
-        {
-            Booster.Run(root);
-            return 0;
-        }
-
         var browser = FindBrowser();
         if (browser == null)
         {
@@ -36,21 +27,8 @@ static class Program
             start.ArgumentList.Add(arg);
         using var window = Process.Start(start)!;
 
-        try
-        {
-            Process.Start(new ProcessStartInfo(Environment.ProcessPath!)
-            {
-                Arguments = $"--boost {window.Id}",
-                UseShellExecute = true,
-                Verb = "runas",
-            });
-        }
-        catch (Win32Exception)
-        {
-            Native.MessageBox(IntPtr.Zero,
-                "Without admin rights scrolltogo can't raise GPU priority, so games may make the stream stutter.\n\nSharing still works.",
-                "scrolltogo", 0x30);
-        }
+        // Runs invisibly until the window is closed.
+        Booster.Run(window.Id);
         return 0;
     }
 

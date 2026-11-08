@@ -1,17 +1,9 @@
 # Gives Chrome the same GPU scheduling priority OBS gives itself
 # (libobs-d3d11/d3d11-subsystem.cpp: D3DKMTSetProcessSchedulingPriorityClass),
 # so an uncapped game can't starve screen capture and encoding.
-# Must run as administrator. Re-run after restarting Chrome.
+# No admin rights needed. Re-run after restarting Chrome.
 
 $ErrorActionPreference = "Stop"
-
-$admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
-  [Security.Principal.WindowsBuiltInRole]::Administrator)
-if (-not $admin) {
-  # Relaunch elevated (shows the Windows admin prompt).
-  Start-Process powershell -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -NoExit -File `"$PSCommandPath`""
-  exit
-}
 
 Add-Type @"
 using System;
