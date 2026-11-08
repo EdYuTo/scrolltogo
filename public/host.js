@@ -104,7 +104,7 @@ $("setup").onsubmit = async (e) => {
   quality = QUALITY[$("quality").value];
   try {
     stream = await navigator.mediaDevices.getDisplayMedia({
-      video: { width: { ideal: quality.width }, height: { ideal: quality.height }, frameRate: { ideal: quality.fps } },
+      video: { width: { ideal: quality.width }, height: { ideal: quality.height }, frameRate: { ideal: quality.fps, max: quality.fps } },
       audio: true,
       systemAudio: "include",
       selfBrowserSurface: "exclude",
@@ -118,6 +118,10 @@ $("setup").onsubmit = async (e) => {
   // sharp. "motion" makes it lower resolution instead, which suits games/video.
   video.contentHint = $("content").value;
   video.onended = stop;
+  // Chrome caps screen capture at 30 fps unless asked for more explicitly.
+  try {
+    await video.applyConstraints({ frameRate: { ideal: quality.fps, max: quality.fps } });
+  } catch {}
 
   codec = (await resolveCodec($("codec").value, quality)).mime;
   ice = await getIceServers();
@@ -210,7 +214,13 @@ function closePeer(id) {
 // Per-viewer stats with a plain-language guess at what's limiting the stream.
 const lastSample = new Map();
 async function refreshStats() {
-  const cards = [];
+  const settings = stream?.getVideoTracks()[0]?.getSettings() ?? {};
+  const cards = [
+    {
+      title: "Your capture",
+      numbers: `${settings.width ?? "?"}×${settings.height ?? "?"} · capturing at up to ${Math.round(settings.frameRate ?? 0)} fps (asked for ${quality.fps})`,
+    },
+  ];
   let n = 0;
   for (const [id, pc] of peers) {
     n++;
