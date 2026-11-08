@@ -114,4 +114,15 @@ select, input {
 }
 .controls button { background: rgba(23, 25, 30, 0.85); border: 1px solid var(--line); }
 .idle .controls { opacity: 0; }
+.audio {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px 0 4px;
+  background: rgba(23, 25, 30, 0.85);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.controls .audio button { background: transparent; border: 0; padding: 8px; font-size: 16px; }
+.audio input { width: 110px; padding: 0; border: 0; background: transparent; accent-color: var(--accent); }
 .idle { cursor: none; }

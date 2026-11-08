@@ -25,7 +25,10 @@
 
     <div class="controls">
       <button id="stats-toggle">📊 Stats</button>
-      <button id="unmute" class="hidden">🔊 Unmute</button>
+      <div class="audio hidden" id="audio">
+        <button id="mute" title="Unmute (M)">🔇</button>
+        <input id="volume" type="range" min="0" max="100" value="100" aria-label="Volume">
+      </div>
       <button id="fullscreen">⛶ Fullscreen</button>
     </div>
   </main>

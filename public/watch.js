@@ -86,7 +86,7 @@ async function onSignal(data) {
       } catch {}
       video.srcObject = e.streams[0];
       video.play().catch(() => {});
-      $("unmute").classList.toggle("hidden", !(video.muted && e.streams[0].getAudioTracks().length));
+      $("audio").classList.toggle("hidden", !e.streams[0].getAudioTracks().length);
     };
     pc.onicecandidate = (e) => e.candidate && signal.send({ type: "signal", data: { candidate: e.candidate } });
     pc.onconnectionstatechange = () => {
@@ -110,7 +110,7 @@ function endStream() {
   pc = null;
   lastSample = null;
   video.srcObject = null;
-  $("unmute").classList.add("hidden");
+  $("audio").classList.add("hidden");
 }
 
 let statsTimer, lastSample;
@@ -142,10 +142,49 @@ async function refreshStats() {
   ].join("\n");
 }
 
-$("unmute").onclick = () => {
-  video.muted = false;
+// Audio. Playback starts muted (browsers block autoplay with sound), so the first
+// click on mute or the slider turns it on. Volume is remembered per viewer.
+try {
+  const saved = parseFloat(localStorage.getItem("volume"));
+  if (saved >= 0.05 && saved <= 1) video.volume = saved;
+} catch {}
+
+function renderAudio() {
+  const silent = video.muted || video.volume === 0;
+  $("mute").textContent = silent ? "🔇" : video.volume < 0.5 ? "🔉" : "🔊";
+  $("mute").title = silent ? "Unmute (M)" : "Mute (M)";
+  $("volume").value = silent ? 0 : Math.round(video.volume * 100);
+}
+
+function setVolume(volume) {
+  video.volume = Math.min(1, Math.max(0, volume));
+  video.muted = video.volume === 0;
   video.play().catch(() => {});
-  $("unmute").classList.add("hidden");
+  if (video.volume > 0) {
+    try {
+      localStorage.setItem("volume", String(video.volume));
+    } catch {}
+  }
+}
+
+function toggleMute() {
+  if (video.muted || video.volume === 0) setVolume(video.volume || 0.5);
+  else video.muted = true;
+}
+
+$("mute").onclick = toggleMute;
+$("volume").oninput = () => setVolume($("volume").value / 100);
+video.onvolumechange = renderAudio;
+renderAudio();
+
+document.onkeydown = (e) => {
+  if (e.target instanceof HTMLInputElement || !$("gate").classList.contains("hidden")) return;
+  if (e.key === "m" || e.key === "M") toggleMute();
+  else if (e.key === "ArrowUp") setVolume(video.volume + 0.1);
+  else if (e.key === "ArrowDown") setVolume(video.volume - 0.1);
+  else if (e.key === "f" || e.key === "F") toggleFullscreen();
+  else return;
+  e.preventDefault();
 };
 
 const toggleFullscreen = () =>
