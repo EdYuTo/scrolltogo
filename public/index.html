@@ -23,15 +23,19 @@
         <p class="hint">Friends need this to watch. Changing it kicks out everyone watching.</p>
       </div>
       <div class="row">
-        <label for="quality">Quality</label>
-        <select id="quality">
-          <option value="720p30">720p · 30 fps (light)</option>
-          <option value="1080p30" selected>1080p · 30 fps</option>
-          <option value="1080p60">1080p · 60 fps (games)</option>
-          <option value="1440p30">1440p · 30 fps</option>
-          <option value="1440p60">1440p · 60 fps</option>
-          <option value="2160p30">4K · 30 fps</option>
-          <option value="2160p60">4K · 60 fps (heavy)</option>
+        <label for="resolution">Resolution</label>
+        <select id="resolution">
+          <option value="720p">720p</option>
+          <option value="1080p" selected>1080p</option>
+          <option value="1440p">1440p</option>
+          <option value="2160p">4K</option>
+        </select>
+        <label for="fps">Frame rate</label>
+        <select id="fps">
+          <option value="30">30 fps</option>
+          <option value="60" selected>60 fps</option>
+          <option value="120">120 fps</option>
+          <option value="240">240 fps</option>
         </select>
       </div>
       <p class="hint" id="upload-hint"></p>

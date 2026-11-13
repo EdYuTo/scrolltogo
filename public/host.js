@@ -1,16 +1,22 @@
 import { getIceServers, Signal } from "/common.js";
 
-const QUALITY = {
-  "720p30": { width: 1280, height: 720, fps: 30, bitrate: 2_500_000 },
-  "1080p30": { width: 1920, height: 1080, fps: 30, bitrate: 5_000_000 },
-  "1080p60": { width: 1920, height: 1080, fps: 60, bitrate: 8_000_000 },
-  "1440p30": { width: 2560, height: 1440, fps: 30, bitrate: 10_000_000 },
-  "1440p60": { width: 2560, height: 1440, fps: 60, bitrate: 15_000_000 },
-  "2160p30": { width: 3840, height: 2160, fps: 30, bitrate: 20_000_000 },
-  "2160p60": { width: 3840, height: 2160, fps: 60, bitrate: 30_000_000 },
+// Bitrate at 30 fps. More frames need more bits, but not proportionally,
+// since consecutive frames are more alike the faster they come.
+const RESOLUTIONS = {
+  "720p": { width: 1280, height: 720, bitrate: 2_500_000 },
+  "1080p": { width: 1920, height: 1080, bitrate: 5_000_000 },
+  "1440p": { width: 2560, height: 1440, bitrate: 10_000_000 },
+  "2160p": { width: 3840, height: 2160, bitrate: 20_000_000 },
 };
+const FPS_BITRATE_FACTOR = { 30: 1, 60: 1.6, 120: 2.5, 240: 4 };
 
 const $ = (id) => document.getElementById(id);
+
+function selectedQuality() {
+  const fps = Number($("fps").value);
+  const res = RESOLUTIONS[$("resolution").value];
+  return { ...res, fps, bitrate: Math.round(res.bitrate * FPS_BITRATE_FACTOR[fps]) };
+}
 const peers = new Map(); // viewer id -> RTCPeerConnection
 let stream, signal, ice, quality, codec, statsTimer;
 
@@ -41,19 +47,26 @@ function randomId(length) {
   return Array.from(crypto.getRandomValues(new Uint8Array(length)), (b) => chars[b % chars.length]).join("");
 }
 
+// Older versions saved one "quality" value like "1440p60".
+const oldQuality = /^(\d+p)(\d+)$/.exec(saved.quality ?? "");
+if (oldQuality && !saved.resolution) Object.assign(saved, { resolution: oldQuality[1], fps: oldQuality[2] });
+
 // Saved as "encoder": an older version stored an AV1 default under "codec".
-for (const [key, id] of [["quality", "quality"], ["content", "content"], ["encoder", "codec"]]) {
+for (const [key, id] of [["resolution", "resolution"], ["fps", "fps"], ["content", "content"], ["encoder", "codec"]]) {
   if (saved[key] && [...$(id).options].some((o) => o.value === saved[key])) $(id).value = saved[key];
 }
 const showUploadHint = () => {
-  const mbps = QUALITY[$("quality").value].bitrate / 1_000_000;
-  $("upload-hint").textContent = `Uses up to ~${mbps} Mbps of your upload per viewer (3 viewers ≈ ${mbps * 3} Mbps).`;
+  const { bitrate, fps } = selectedQuality();
+  const mbps = Math.round(bitrate / 100_000) / 10;
+  $("upload-hint").textContent =
+    `Uses up to ~${mbps} Mbps of your upload per viewer (3 viewers ≈ ${Math.round(mbps * 3)} Mbps).` +
+    (fps > 60 ? ` Friends see at most as many fps as their monitor's refresh rate.` : "");
 };
 const showCodecHint = async () => {
-  const choice = await resolveCodec($("codec").value, QUALITY[$("quality").value]);
+  const choice = await resolveCodec($("codec").value, selectedQuality());
   $("codec-hint").textContent = `→ ${choice.mime.slice(6)}${choice.hardware ? " (hardware encoder)" : " (software encoder)"}`;
 };
-$("quality").onchange = () => (showUploadHint(), showCodecHint());
+$("resolution").onchange = $("fps").onchange = () => (showUploadHint(), showCodecHint());
 $("codec").onchange = showCodecHint;
 showUploadHint();
 showCodecHint();
@@ -101,7 +114,7 @@ $("setup").onsubmit = async (e) => {
   $("error").classList.add("hidden");
   const room = $("room").value;
   const password = $("password").value;
-  quality = QUALITY[$("quality").value];
+  quality = selectedQuality();
   try {
     stream = await navigator.mediaDevices.getDisplayMedia({
       video: { width: { ideal: quality.width }, height: { ideal: quality.height }, frameRate: { ideal: quality.fps, max: quality.fps } },
@@ -141,7 +154,7 @@ $("setup").onsubmit = async (e) => {
       showError(e.reason || "Disconnected from the room.");
     },
   });
-  save(Object.assign(saved, { room, quality: $("quality").value, content: $("content").value, encoder: $("codec").value }));
+  save(Object.assign(saved, { room, resolution: $("resolution").value, fps: $("fps").value, content: $("content").value, encoder: $("codec").value }));
 };
 
 function onMessage(msg) {
